@@ -1,3 +1,5 @@
+#ifndef NODE_H
+#define NODE_H
 struct Node
 {
   char symbol;
@@ -6,3 +8,4 @@ struct Node
   Node* l_child;
   Node* r_child;
 };
+#endif

@@ -4,11 +4,11 @@ SRC = $(wildcard src/*.cpp)
 OBJ = $(patsubst src/%.cpp, build/%.o, $(SRC))
 
 run: all
-	./bin/huffman
+	./bin/huffman.exe
 
-all: bin/huffman
+all: bin/huffman.exe
 
-bin/huffman: $(OBJ)
+bin/huffman.exe: $(OBJ)
 	g++ -o $@ $^
 
 build/%.o: src/%.cpp
