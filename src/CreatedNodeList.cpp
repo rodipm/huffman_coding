@@ -61,6 +61,7 @@ struct CreatedNodeList
       delete curElement;
       curElement = nextElement;
     }
+    this->createdNodeList = nullptr;
   }
 };
 

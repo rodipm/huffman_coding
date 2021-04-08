@@ -9,13 +9,13 @@
 #include "CreatedNodeList.cpp"
 
 // http://en.cppreference.com/w/cpp/language/type_alias
-using byte = unsigned char ;
+using byte = unsigned char;
 
 // http://en.cppreference.com/w/cpp/types/numeric_limits
-constexpr std::size_t BITS_PER_BYTE = std::numeric_limits<byte>::digits ;
+constexpr std::size_t BITS_PER_BYTE = std::numeric_limits<byte>::digits;
 
 // http://en.cppreference.com/w/cpp/utility/bitset
-using bits_in_byte = std::bitset<BITS_PER_BYTE> ;
+using bits_in_byte = std::bitset<BITS_PER_BYTE>;
 
 void generateStringCodes(Node *node, std::string *codes, std::stringstream &code)
 {
@@ -39,7 +39,7 @@ void generateStringCodes(Node *node, std::string *codes, std::stringstream &code
   }
 }
 
-std::string preprocess(std::string path, int *chars, PriorityQueue& pq, CreatedNodeList& createdNodeList)
+std::string preprocess(std::string path, int *chars)
 {
   std::ifstream t(path);
   std::stringstream text;
@@ -48,22 +48,6 @@ std::string preprocess(std::string path, int *chars, PriorityQueue& pq, CreatedN
   for (auto ch : text.str())
   {
     chars[ch] += 1;
-  }
-
-  for (int i = 0; i < 128; i++)
-  {
-    if (chars[i] != 0)
-    {
-      Node *n = new Node();
-      n->symbol = static_cast<char>(i);
-      n->weight = chars[i];
-      n->parent = nullptr;
-      n->l_child = nullptr;
-      n->r_child = nullptr;
-
-      createdNodeList.push(n);
-      pq.push(n);
-    }
   }
 
   return text.str();
@@ -104,8 +88,24 @@ std::string decodeString(std::string text, Node *tree)
   return decoded.str();
 }
 
-Node* generateTree(PriorityQueue& pq, CreatedNodeList& createdNodeList)
+Node *generateTree(PriorityQueue &pq, CreatedNodeList &createdNodeList, int *chars)
 {
+
+  for (int i = 0; i < 128; i++)
+  {
+    if (chars[i] != 0)
+    {
+      Node *n = new Node();
+      n->symbol = static_cast<char>(i);
+      n->weight = chars[i];
+      n->parent = nullptr;
+      n->l_child = nullptr;
+      n->r_child = nullptr;
+
+      createdNodeList.push(n);
+      pq.push(n);
+    }
+  }
   while (pq.getSize() > 1)
   {
     int newWeight = 0;
@@ -125,44 +125,59 @@ Node* generateTree(PriorityQueue& pq, CreatedNodeList& createdNodeList)
   return pq.pop();
 }
 
-std::string read_bits( const char* path_to_file )
+std::string read_bits(std::string path_to_file, int *chars)
 {
-    std::string bitstring ;
-    std::ifstream file( path_to_file, std::ios::binary ) ; // open in binary mode
+  std::stringstream bitstring;
+  std::ifstream file(path_to_file, std::ios::binary); // open in binary mode
 
-    char c ;
-    while( file.get(c) ) // read byte by byte
-        bitstring += bits_in_byte( byte(c) ).to_string() ; // append as string of '0' '1'
+  int weight;
+  for (int i = 0; i < 128; i++)
+  {
+    file.read(reinterpret_cast<char *>(&weight), sizeof(weight));
+    chars[i] = weight;
+  }
 
-    return bitstring ;
+  char c;
+  while (file.read(&c, 1))
+  {
+    bitstring << bits_in_byte(byte(c)).to_string(); // append as string of '0' '1'
+  }
+
+  return bitstring.str();
 }
 
-void write_bits( std::string bitstring, const char* path_to_file )
+void write_bits(std::string bitstring, std::string path_to_file, int *chars)
 {
-    // pad with zeroes to make it represent an integral multiple of bytes
-    while( bitstring.size()% BITS_PER_BYTE ) bitstring += '0' ;
+  // pad with zeroes to make it represent an integral multiple of bytes
+  while (bitstring.size() % BITS_PER_BYTE)
+    bitstring += '0';
 
-    std::ofstream file( path_to_file, std::ios::binary ) ; // open in binary mode
+  std::ofstream file(path_to_file, std::ios::binary); // open in binary mode
 
-    for( std::size_t i = 0 ; i < bitstring.size() ; i += BITS_PER_BYTE )
-    {
-        // convert each sequence of '0' or '1' to a byte
-        byte b = bits_in_byte( bitstring.substr( i, BITS_PER_BYTE ) ).to_ulong() ;
-        file << b ; // and write it
-    }
+  int weight;
+  for (int i = 0; i < 128; i++)
+  {
+    weight = chars[i];
+    file.write(reinterpret_cast<const char *>(&weight), sizeof(weight));
+  }
+
+  for (std::size_t i = 0; i < bitstring.size(); i += BITS_PER_BYTE)
+  {
+    // convert each sequence of '0' or '1' to a byte
+    byte b = bits_in_byte(bitstring.substr(i, BITS_PER_BYTE)).to_ulong();
+    file << b; // and write it
+  }
 }
 
-int main()
+void encode(std::string path)
 {
-  srand(static_cast<unsigned int>(time(NULL)));
   Node *tree = nullptr;
   CreatedNodeList createdNodeList;
   PriorityQueue pq;
-  int chars[128] = {};
+  int *chars{new int[128]{}};
 
-  std::string path("Makefile");
-  std::string text = preprocess(path, chars, pq, createdNodeList);
-  tree = generateTree(pq, createdNodeList);
+  std::string text = preprocess(path, chars);
+  tree = generateTree(pq, createdNodeList, chars);
 
   std::string codes[128];
   std::stringstream code;
@@ -175,15 +190,46 @@ int main()
   }
 
   std::string encodedString = encodeString(text, codes);
-  std::cout << encodedString << std::endl;
 
-  write_bits(encodedString, "encodedFile");
+  std::stringstream outPath;
+  outPath << path << ".huff";
 
-  std::string readEncodedString = read_bits("encodedFile");
+  write_bits(encodedString, outPath.str(), chars);
+  createdNodeList.clean();
+}
+
+std::string decode(std::string path)
+{
+  Node *tree = nullptr;
+  CreatedNodeList createdNodeList;
+  PriorityQueue pq;
+  int *chars{new int[128]{}};
+
+  std::string readEncodedString = read_bits(path, chars);
+
+  tree = generateTree(pq, createdNodeList, chars);
 
   std::string decodedString = decodeString(readEncodedString, tree);
-  std::cout << decodedString << std::endl;
 
   createdNodeList.clean();
+
+  return decodedString;
+}
+
+int main(int argc, char **argv)
+{
+  
+  if (argc < 2)
+  {
+    std::cout << "No input file." << std::endl;
+    return 1;
+  }
+
+  std::string path(argv[1]);
+
+  if (path.find(".huff") == std::string::npos)
+    encode(path);
+  else
+    std::cout << decode(path) << std::endl;
   return 0;
 }
